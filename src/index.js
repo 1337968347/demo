@@ -5,16 +5,16 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 const Matrix4 = THREE.Matrix4;
 const scene = new THREE.Scene();
 
-const viewR = 0.25
 // var camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, viewR, -viewR);
-var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 2000);
+var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
 var renderer = new THREE.WebGLRenderer();
+renderer.getContext().depthBuffer = true;
+renderer.getContext().stencilBuffer = true;
 camera.position.z = 5;
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Resize after viewport-size-change
 window.addEventListener("resize", function () {
   var height = window.innerHeight;
   var width = window.innerWidth;
@@ -23,24 +23,21 @@ window.addEventListener("resize", function () {
   camera.updateProjectionMatrix();
 });
 
-// Adding controls
 new OrbitControls(camera, renderer.domElement);
-
-let coronaryBackMesh = null;
-let coronaryFrontMesh = null;
 
 /**
  * 
- * @param {THREE.Group} heartGroup 
+ * @param {THREE.Group} backGroup 
  */
-const prepareScence = (heartGroup) => {
+const prepareScence = (backGroup) => {
   const circleR = 20;
-  const T = new Matrix4().makeTranslation(-6, 0, 0);
+  const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 8));
+
   const S = new Matrix4().makeScale(circleR, circleR, circleR);
-  const RX = new Matrix4().makeRotationX(-Math.PI / 2);
-  const RY = new Matrix4().makeRotationY(Math.PI / 3);
+  const RX = new Matrix4().makeRotationX(-Math.PI / 2 - Math.PI / 8);
+  const RY = new Matrix4().makeRotationY(-Math.PI / 2);
   const RZ = new Matrix4().makeRotationX(Math.PI / 3);
-  const mat4 = new Matrix4().multiply(S).multiply(RX).multiply(RY).multiply(RZ);
+  const mat4 = new Matrix4().multiply(new Matrix4().copy(baseR).invert()).multiply(S).multiply(RX).multiply(RY).multiply(RZ);
 
   /** 心脏顶点着色器 */
   const vertexShader = `
@@ -56,89 +53,126 @@ const prepareScence = (heartGroup) => {
 
   /** 心脏片元着色器 */
   const fragmentShaderBack = `
-    uniform mat4 plane;
-    varying vec3 vNormal; // 接收从顶点着色器传递过来的法线
-    varying vec3 vPosition;
-    
-    void main() {
-        vec4 pos = plane * vec4(vPosition, 1.0);
-        vec3 light = vec3(0.0, 0.0, -1.0);
-        float alight = max(dot(light, vNormal) / 4.0, 0.0) + 0.5;
-
-        if(abs(pos.z) < 0.015) {
-          gl_FragColor = vec4(0, 0.6, 0.0, 1.0);
-        } else {
-          if(pos.z > 0.0) {
-            discard;
-        } else {
-            gl_FragColor =  vec4(alight, 0.0, 0.0, 1.0); // 设置像素颜色为半透明红色
-        }
-        }
-    }
-  `
-
-  const fragmentShaderFront = `
+        uniform float constantAttenuation;
+        uniform float linearAttenuation;
+        uniform float quadraticAttenuation;
         uniform mat4 plane;
+        uniform vec3 baseColor;
         varying vec3 vNormal; // 接收从顶点着色器传递过来的法线
         varying vec3 vPosition;
         
         void main() {
             vec4 pos = plane * vec4(vPosition, 1.0);
-            vec3 sunPos = vec3(10.0, 10.0, 20.0);
+            vec3 sunPos = vec3(0.0, -5.0, 30.0);
             float len = distance(sunPos, vPosition);
-            
+        
+            vec3 normal = normalize(vNormal);
+        
+            if(gl_FrontFacing == false) {
+                normal = -normal;
+            }
+        
             // 计算距离衰减因子
-            float attenuation = 1.0 / (0.10 + 0.02 * len + 0.0005 * len * len);
-            vec3 light = normalize(vPosition - sunPos);
-            float alight = max(dot(light, vNormal) / 2.0, 0.0) * attenuation;
-            
-            alight += 0.15;
-            if(abs(pos.z) < 0.00008) {
-              gl_FragColor = vec4(0.2, 0.6, 0.0, 1.0);
-            } else {
-              if(pos.z > 0.0) {
+            float attenuation = 1.0 / (constantAttenuation + linearAttenuation * len + quadraticAttenuation * len * len);
+            vec3 light = normalize(sunPos - vPosition);
+            float alight = max(dot(light, normal) / 2.0, 0.0) * attenuation;
+        
+            alight += 0.35;
+            // if(abs(pos.z) < 0.00002) {
+            //     gl_FragColor = vec4(0.2, 0.6, 0.2, 1.0);
+            // } else {
+                if(pos.z > 0.0) {
+                    discard;
+                } else {
+                    gl_FragColor = vec4(baseColor * alight, 1.0);// 设置像素颜色为半透明红色
+                }
+            // }
+        }
+  `
+
+  const fragmentShaderFront = `
+        uniform float constantAttenuation;
+        uniform float linearAttenuation;
+        uniform float quadraticAttenuation;
+        uniform mat4 plane;
+        uniform vec3 sunPos;
+        uniform vec3 baseColor;
+        varying vec3 vNormal; // 接收从顶点着色器传递过来的法线
+        varying vec3 vPosition;
+        
+        void main() {
+            vec4 pos = plane * vec4(vPosition, 1.0);
+            float len = distance(sunPos, vPosition);
+            vec3 normal = normalize(vNormal);
+            if(gl_FrontFacing == false) {
+                normal = -normal;
+            }
+            // 计算距离衰减因子
+            float attenuation = 1.0 / (constantAttenuation + linearAttenuation * len + quadraticAttenuation * len * len);
+            vec3 light = normalize(sunPos - vPosition);
+            float alight = max(dot(light, normal) / 2.0, 0.0) * attenuation;
+
+            alight += 0.25;
+            if(pos.z < 0.0) {
                 discard;
-              } else {
-                gl_FragColor = vec4(alight, 0.0, 0.0, 1.0);// 设置像素颜色为半透明红色
-              }
+            } else {
+                gl_FragColor = vec4(alight * baseColor, 0.1);
             }
         }
       `
 
   const matElements = new Matrix4().copy(mat4).invert()
+  const sunPos = new THREE.Vector3(0.0, -5.0, 20.0);
 
-  /** 心脏背面 */
-  const coronaryBackMaterial = new THREE.ShaderMaterial({
-    vertexShader: vertexShader,
-    fragmentShader: fragmentShaderBack,
-    // side: THREE.DoubleSide,
-    // transparent: false,
-    // depthTest: true,
-    // depthWrite: true,
-    uniforms: {
-      plane: { type: 'mat4', value: matElements }
-    },
-  });
-
-  /** 心脏前面 */
-  const coronaryFrontMaterial = new THREE.ShaderMaterial({
-    vertexShader: vertexShader,
-    fragmentShader: fragmentShaderFront,
-    side: THREE.DoubleSide,
-    uniforms: {
-      plane: { type: 'mat4', value: matElements }
-    },
-    // transparent: true,
-    // depthTest: true,
-    // depthWrite: true
-  });
-
-  heartGroup.traverse((mesh) => {
+  backGroup.traverse((mesh) => {
     if (mesh instanceof THREE.Mesh) {
-      const scale = 40;
+      const scale = 30;
       mesh.position.set(0, 0, 0);
       mesh.scale.setScalar(scale);
-      mesh.material = coronaryFrontMaterial;
+
+      const uniforms = {
+        plane: { type: 'mat4', value: matElements },
+        sunPos: { type: 'vec3', value: sunPos },
+        constantAttenuation: { type: 'float', value: 0.1 },
+        linearAttenuation: { type: 'float', value: 0.015 },
+        quadraticAttenuation: { type: 'float', value: 0.0005 },
+        baseColor: { type: 'vec3', value: mesh.userData.color }
+      }
+
+      /** 心脏背面 后侧不透明 */
+      const coronaryBackMaterial = new THREE.ShaderMaterial({
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShaderBack,
+        side: THREE.DoubleSide,
+        transparent: false,
+        uniforms: uniforms
+      });
+
+      const backMesh = mesh.clone();
+      const frontMesh = mesh.clone();
+      backMesh.material = coronaryBackMaterial;
+      backMesh.applyMatrix4(baseR);
+      scene.add(backMesh);
+
+      /** 心脏前面  前侧透明 */
+      const coronaryFrontMaterial = new THREE.ShaderMaterial({
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShaderFront,
+        // side: THREE.DoubleSide,
+        transparent: false,
+        depthTest: true,
+        depthWrite: false,
+        uniforms: uniforms,
+
+        blending: THREE.CustomBlending, // 设置自定义混合模式
+        blendSrc: THREE.SrcAlphaFactor, // 设置源混合因子
+        blendDst: THREE.OneMinusSrcAlphaFactor, // 设置目标混合因子
+        blendEquation: THREE.AddEquation // 设置混合方程
+      });
+
+      frontMesh.material = coronaryFrontMaterial;
+      frontMesh.applyMatrix4(baseR);
+      // scene.add(frontMesh);
     }
   })
 
@@ -177,10 +211,9 @@ const prepareScence = (heartGroup) => {
   edgesCircle.applyMatrix4(mat4);
   edgesCircle.updateMatrixWorld();
 
-  scene.add(heartGroup);
+
   // scene.add(fillCircle)
   // scene.add(edgesCircle);
-  // scene.add(coronaryFrontMesh);
 
   var ambientLight = new THREE.AmbientLight(0xffffff, 0.2)
   var directiontLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -190,20 +223,58 @@ const prepareScence = (heartGroup) => {
 
 // 加载心脏模型
 const loader = new OBJLoader();
+
 loader.load('demo.obj', function (group) {
-  // prepareScence(geometry)
 
-  const innerGroup = new THREE.Group();
-  const outerGroup = new THREE.Group();
-  const side = 4;
+  group.remove(group.children[0]);
+  // 心脏里面的血管
+  const bloodGroup = new THREE.Group();
+  /** 右心房 */
+  const rightAtriumGroup = new THREE.Group();
+  // 左心房
+  const leftAtriumGroup = new THREE.Group();
+  /** 心室 */
+  const VentricleGroup = new THREE.Group();
+  // /** 右心室 */
+  // const rightVentricleGroup = new THREE.Group();
+  /** 壳 */
+  const shellGroup = new THREE.Group();
+  /** 主动脉 */
+  const aortaGroup = new THREE.Group()
 
-  for (let i = 0; i < side; i++) { innerGroup.add(group.children[i]) }
+  for (let i = 0; i < 4; i++) { group.remove(group.children[0]) }
 
-  for (let i = side; i < group.children.length; i++) { outerGroup.add(group.children[i]) }
+  bloodGroup.add(group.children[0])
+  bloodGroup.add(group.children[0])
+  /** 右心房 */
+  rightAtriumGroup.add(group.children[0])
+  group.remove(group.children[0]);
+  /** 左心房 */
+  leftAtriumGroup.add(group.children[0])
+  group.remove(group.children[0]);
+  /** 主动脉 */
+  aortaGroup.add(group.children[0]);
+  group.remove(group.children[0]);
+  /** 左心室 右心室 */
+  VentricleGroup.add(group.children[0])
+  shellGroup.add(group.children[0])
 
-  // scene.add(innerGroup);
-  // scene.add(outerGroup);
-  prepareScence(outerGroup)
+  bloodGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(1.0, 1.0, 1.0); })
+  rightAtriumGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.64, 0.66, 0.8); })
+  leftAtriumGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.64, 0.66, 0.8) })
+  VentricleGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.48, 0.52, 0.72) })
+  shellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.81, 0.51, 0.70) })
+  aortaGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.88, 0.53, 0.53) })
+
+  const backGroup = new THREE.Group()
+  backGroup.add(bloodGroup)
+  backGroup.add(rightAtriumGroup)
+  backGroup.add(leftAtriumGroup)
+  backGroup.add(VentricleGroup)
+  backGroup.add(shellGroup)
+  backGroup.add(aortaGroup)
+
+  prepareScence(backGroup)
 });
 
 var render = function () {
