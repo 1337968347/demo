@@ -8,8 +8,6 @@ const scene = new THREE.Scene();
 // var camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, viewR, -viewR);
 var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
 var renderer = new THREE.WebGLRenderer();
-renderer.getContext().depthBuffer = true;
-renderer.getContext().stencilBuffer = true;
 camera.position.z = 5;
 
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -31,7 +29,8 @@ new OrbitControls(camera, renderer.domElement);
  */
 const prepareScence = (backGroup) => {
   const circleR = 20;
-  const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 8));
+  //
+  const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 12));
 
   const S = new Matrix4().makeScale(circleR, circleR, circleR);
   const RX = new Matrix4().makeRotationX(-Math.PI / 2 - Math.PI / 8);
@@ -45,7 +44,7 @@ const prepareScence = (backGroup) => {
     varying vec3 vNormal; // 定义一个 varying 变量用于传递法线
 
     void main() {
-        vNormal = normalize(normal); // 计算变换后的法线并传递给 varying 变量
+        vNormal = normalize(normalMatrix * normal); // 计算变换后的法线并传递给 varying 变量
         vPosition = position; // 将顶点位置传递给插值变量
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
@@ -56,6 +55,7 @@ const prepareScence = (backGroup) => {
         uniform float constantAttenuation;
         uniform float linearAttenuation;
         uniform float quadraticAttenuation;
+        uniform vec3 sunPos;
         uniform mat4 plane;
         uniform vec3 baseColor;
         varying vec3 vNormal; // 接收从顶点着色器传递过来的法线
@@ -63,7 +63,6 @@ const prepareScence = (backGroup) => {
         
         void main() {
             vec4 pos = plane * vec4(vPosition, 1.0);
-            vec3 sunPos = vec3(0.0, -5.0, 30.0);
             float len = distance(sunPos, vPosition);
         
             vec3 normal = normalize(vNormal);
@@ -122,7 +121,7 @@ const prepareScence = (backGroup) => {
       `
 
   const matElements = new Matrix4().copy(mat4).invert()
-  const sunPos = new THREE.Vector3(0.0, -5.0, 20.0);
+  const sunPos = new THREE.Vector3(0.0, 0, 20.0);
 
   backGroup.traverse((mesh) => {
     if (mesh instanceof THREE.Mesh) {
@@ -211,10 +210,6 @@ const prepareScence = (backGroup) => {
   edgesCircle.applyMatrix4(mat4);
   edgesCircle.updateMatrixWorld();
 
-
-  // scene.add(fillCircle)
-  // scene.add(edgesCircle);
-
   var ambientLight = new THREE.AmbientLight(0xffffff, 0.2)
   var directiontLight = new THREE.DirectionalLight(0xffffff, 1);
   scene.add(ambientLight);
@@ -226,13 +221,19 @@ const loader = new OBJLoader();
 
 loader.load('demo.obj', function (group) {
 
+  console.log(group)
+  debugger
   group.remove(group.children[0]);
   // 心脏里面的血管
   const bloodGroup = new THREE.Group();
   /** 右心房 */
   const rightAtriumGroup = new THREE.Group();
+  /** 右心房外壳 */
+  const rightAtriumShellGroup = new THREE.Group();
   // 左心房
   const leftAtriumGroup = new THREE.Group();
+  /** 左心房外壳 */
+  const leftAtriumShellGroup = new THREE.Group();
   /** 心室 */
   const VentricleGroup = new THREE.Group();
   // /** 右心室 */
@@ -241,38 +242,53 @@ loader.load('demo.obj', function (group) {
   const shellGroup = new THREE.Group();
   /** 主动脉 */
   const aortaGroup = new THREE.Group()
+  /** 主动脉壳 */
+  const aortaShellGroup = new THREE.Group();
 
   for (let i = 0; i < 4; i++) { group.remove(group.children[0]) }
 
   bloodGroup.add(group.children[0])
   bloodGroup.add(group.children[0])
   /** 右心房 */
-  rightAtriumGroup.add(group.children[0])
-  group.remove(group.children[0]);
+  rightAtriumShellGroup.add(group.children[0])
+  /** 右心房外壳 */
+  rightAtriumGroup.add(group.children[0]);
+
   /** 左心房 */
+  leftAtriumShellGroup.add(group.children[0]);
   leftAtriumGroup.add(group.children[0])
-  group.remove(group.children[0]);
   /** 主动脉 */
   aortaGroup.add(group.children[0]);
-  group.remove(group.children[0]);
+  aortaShellGroup.add(group.children[0]);
+
   /** 左心室 右心室 */
   VentricleGroup.add(group.children[0])
   shellGroup.add(group.children[0])
 
   bloodGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(1.0, 1.0, 1.0); })
   rightAtriumGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.64, 0.66, 0.8); })
+  rightAtriumShellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.1, 0.53, 0.53); })
+
   leftAtriumGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.64, 0.66, 0.8) })
+  leftAtriumShellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.1, 0.66, 0.8) })
   VentricleGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.48, 0.52, 0.72) })
   shellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.81, 0.51, 0.70) })
   aortaGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.88, 0.53, 0.53) })
+  aortaShellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.38, 0.53, 0.53) })
 
   const backGroup = new THREE.Group()
   backGroup.add(bloodGroup)
   backGroup.add(rightAtriumGroup)
+  backGroup.add(rightAtriumShellGroup)
+
   backGroup.add(leftAtriumGroup)
+  backGroup.add(leftAtriumShellGroup)
+  
   backGroup.add(VentricleGroup)
   backGroup.add(shellGroup)
+
   backGroup.add(aortaGroup)
+  backGroup.add(aortaShellGroup)
 
   prepareScence(backGroup)
 });
