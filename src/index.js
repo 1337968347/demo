@@ -218,11 +218,44 @@ const prepareScence = (backGroup) => {
 
 // 加载心脏模型
 const loader = new OBJLoader();
+const textLoader = new THREE.TextureLoader();
 
-loader.load('demo.obj', function (group) {
+/**
+ * 加载一堆纹理
+ * @param {String[]} urls 
+ */
+const loadTextures = async (urls) => {
+  const promises = urls.map((url) => {
+    return new Promise((resolve, reject) => {
+      textLoader.load(
+        'textures/' + url,
+        (texture) => {
+          resolve(texture)
+        },
+        undefined,
+        // onError callback
+        (err) => {
+          reject('An error happened.')
+        }
+      );
+    })
+  })
+  return await Promise.all(promises)
+}
 
+var render = function () {
+  renderer.render(scene, camera);
+};
+
+var GameLoop = function () {
+  requestAnimationFrame(GameLoop);
+  render();
+};
+
+loader.load('demo.obj', async (group) => {
+
+  const [] = await loadTextures(['Tex_0057.png', 'Tex_0058.png', 'Tex_0177.png', 'Tex_0414.png'])
   console.log(group)
-  debugger
   group.remove(group.children[0]);
   // 心脏里面的血管
   const bloodGroup = new THREE.Group();
@@ -283,7 +316,7 @@ loader.load('demo.obj', function (group) {
 
   backGroup.add(leftAtriumGroup)
   backGroup.add(leftAtriumShellGroup)
-  
+
   backGroup.add(VentricleGroup)
   backGroup.add(shellGroup)
 
@@ -291,15 +324,8 @@ loader.load('demo.obj', function (group) {
   backGroup.add(aortaShellGroup)
 
   prepareScence(backGroup)
+  GameLoop();
 });
 
-var render = function () {
-  renderer.render(scene, camera);
-};
 
-var GameLoop = function () {
-  requestAnimationFrame(GameLoop);
-  render();
-};
 
-GameLoop();
