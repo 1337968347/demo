@@ -25,27 +25,34 @@ new OrbitControls(camera, renderer.domElement);
 
 /**
  * 
- * @param {THREE.Group} backGroup 
+ * @param {THREE.Group} group 
+ * @param { {[key: string]: THREE.Texture} } textures
  */
-const prepareScence = (backGroup) => {
+const prepareScence = (group, textures) => {
+
+  const { textureMap1, textureMap2, textureMap3, normalMap1, normalMap2, normalMap3 } = textures;
+
   const circleR = 20;
-  //
+  // 物体的基础旋转
   const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 12));
 
   const S = new Matrix4().makeScale(circleR, circleR, circleR);
   const RX = new Matrix4().makeRotationX(-Math.PI / 2 - Math.PI / 8);
   const RY = new Matrix4().makeRotationY(-Math.PI / 2);
   const RZ = new Matrix4().makeRotationX(Math.PI / 3);
+  // 切面的旋转
   const mat4 = new Matrix4().multiply(new Matrix4().copy(baseR).invert()).multiply(S).multiply(RX).multiply(RY).multiply(RZ);
 
   /** 心脏顶点着色器 */
   const vertexShader = `
     varying vec3 vPosition; // 在顶点着色器中声明一个 varying 变量
     varying vec3 vNormal; // 定义一个 varying 变量用于传递法线
+    varying vec2 vUv; // 传递给片元着色器的UV值变量
 
     void main() {
         vNormal = normalize(normalMatrix * normal); // 计算变换后的法线并传递给 varying 变量
         vPosition = position; // 将顶点位置传递给插值变量
+        vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `;
@@ -57,33 +64,40 @@ const prepareScence = (backGroup) => {
         uniform float quadraticAttenuation;
         uniform vec3 sunPos;
         uniform mat4 plane;
-        uniform vec3 baseColor;
+        uniform sampler2D textureMap;
+        uniform sampler2D normalMap;
         varying vec3 vNormal; // 接收从顶点着色器传递过来的法线
         varying vec3 vPosition;
+        varying vec2 vUv;
         
         void main() {
             vec4 pos = plane * vec4(vPosition, 1.0);
             float len = distance(sunPos, vPosition);
         
-            vec3 normal = normalize(vNormal);
-        
+            vec3 normal = normalize(texture2D(normalMap, vUv).xyz);
+            // 纹理颜色
+            vec3 textureColor = texture2D(textureMap, vUv).xyz;
+
+
             if(gl_FrontFacing == false) {
-                normal = -normal;
+                textureColor = vec3(0.88, 0.53, 0.53);
+                // normal = -normal;
+                normal = vec3(0.0, 0.0, 1.0);
             }
         
             // 计算距离衰减因子
             float attenuation = 1.0 / (constantAttenuation + linearAttenuation * len + quadraticAttenuation * len * len);
             vec3 light = normalize(sunPos - vPosition);
-            float alight = max(dot(light, normal) / 2.0, 0.0) * attenuation;
+            float alight = (max(dot(light, normal), 0.0)) ;
         
-            alight += 0.35;
+            // alight += 0.15;
             // if(abs(pos.z) < 0.00002) {
             //     gl_FragColor = vec4(0.2, 0.6, 0.2, 1.0);
             // } else {
                 if(pos.z > 0.0) {
                     discard;
                 } else {
-                    gl_FragColor = vec4(baseColor * alight, 1.0);// 设置像素颜色为半透明红色
+                    gl_FragColor = vec4(textureColor * alight, 1.0); // 设置像素颜色为半透明红色
                 }
             // }
         }
@@ -121,21 +135,40 @@ const prepareScence = (backGroup) => {
       `
 
   const matElements = new Matrix4().copy(mat4).invert()
-  const sunPos = new THREE.Vector3(0.0, 0, 20.0);
+  const sunPos = new THREE.Vector3(0.0, 0, 2.0);
 
-  backGroup.traverse((mesh) => {
+  group.traverse((mesh) => {
     if (mesh instanceof THREE.Mesh) {
-      const scale = 30;
+      const scale = 2;
       mesh.position.set(0, 0, 0);
       mesh.scale.setScalar(scale);
+      let textureMap = null, normalMap = null;
+      switch (mesh.userData.type) {
+        case 1:
+          textureMap = textureMap1;
+          normalMap = normalMap1;
+          break;
+        case 2:
+          textureMap = textureMap2;
+          normalMap = normalMap2;
+          break;
+        case 3:
+          textureMap = textureMap3;
+          normalMap = normalMap3;
+          break;
+        default:
+          break;
+      }
 
       const uniforms = {
         plane: { type: 'mat4', value: matElements },
         sunPos: { type: 'vec3', value: sunPos },
-        constantAttenuation: { type: 'float', value: 0.1 },
-        linearAttenuation: { type: 'float', value: 0.015 },
-        quadraticAttenuation: { type: 'float', value: 0.0005 },
-        baseColor: { type: 'vec3', value: mesh.userData.color }
+        constantAttenuation: { type: 'float', value: 1.0 },
+        linearAttenuation: { type: 'float', value: 0.02 },
+        quadraticAttenuation: { type: 'float', value: 0.005 },
+        // baseColor: { type: 'vec3', value: mesh.userData.color },
+        textureMap: { type: 'sampler2D', value: textureMap },
+        normalMap: { type: 'sampler2D', value: normalMap },
       }
 
       /** 心脏背面 后侧不透明 */
@@ -252,11 +285,18 @@ var GameLoop = function () {
   render();
 };
 
-loader.load('demo.obj', async (group) => {
+loader.load('heart.obj', async (group) => {
 
-  const [] = await loadTextures(['Tex_0057.png', 'Tex_0058.png', 'Tex_0177.png', 'Tex_0414.png'])
-  console.log(group)
-  group.remove(group.children[0]);
+  const [
+    textureMap1, textureMap2, textureMap3,
+    normalMap1, normalMap2, normalMap3
+  ] = await loadTextures([
+    // 纹理
+    'Tex_0058.png', 'Tex_0414.png', 'Tex_0053.png', 
+    // 法线
+    'Tex_0057.png', 'Tex_0177.png', 'Tex_0050.png',
+  ])
+
   // 心脏里面的血管
   const bloodGroup = new THREE.Group();
   /** 右心房 */
@@ -277,53 +317,56 @@ loader.load('demo.obj', async (group) => {
   const aortaGroup = new THREE.Group()
   /** 主动脉壳 */
   const aortaShellGroup = new THREE.Group();
+  group.remove(group.children[0]);
+  group.remove(group.children[0]);
+  group.remove(group.children[0]);
+  group.remove(group.children[0]);
+  bloodGroup.add(group.children[0]);
+  bloodGroup.add(group.children[0]);
 
-  for (let i = 0; i < 4; i++) { group.remove(group.children[0]) }
-
-  bloodGroup.add(group.children[0])
-  bloodGroup.add(group.children[0])
-  /** 右心房 */
+  // /** 右心房 */
   rightAtriumShellGroup.add(group.children[0])
-  /** 右心房外壳 */
+  // /** 右心房外壳 */
   rightAtriumGroup.add(group.children[0]);
 
-  /** 左心房 */
+  // /** 左心房 */
   leftAtriumShellGroup.add(group.children[0]);
   leftAtriumGroup.add(group.children[0])
-  /** 主动脉 */
+  // /** 主动脉 */
+  aortaGroup.add(group.children[0]);
+  /** 主动脉壳 */
+  group.remove(group.children[0]);
+
   aortaGroup.add(group.children[0]);
   aortaShellGroup.add(group.children[0]);
+  aortaGroup.add(group.children[0]);
+  // aortaShellGroup.add(group.children[0]);
 
-  /** 左心室 右心室 */
-  VentricleGroup.add(group.children[0])
-  shellGroup.add(group.children[0])
+  bloodGroup.traverse((mesh) => { mesh.userData.type = 2 })
+  rightAtriumGroup.traverse((mesh) => { mesh.userData.type = 3 })
+  rightAtriumShellGroup.traverse((mesh) => { mesh.userData.type = 1 })
+  leftAtriumGroup.traverse((mesh) => { mesh.userData.type = 3 })
+  leftAtriumShellGroup.traverse((mesh) => { mesh.userData.type = 1 })
+  VentricleGroup.traverse((mesh) => { mesh.userData.type = 3 })
+  shellGroup.traverse((mesh) => { mesh.userData.type = 1 })
+  aortaGroup.traverse((mesh) => { mesh.userData.type = 1 })
+  aortaShellGroup.traverse((mesh) => { mesh.userData.type = 3 })
 
-  bloodGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(1.0, 1.0, 1.0); })
-  rightAtriumGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.64, 0.66, 0.8); })
-  rightAtriumShellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.1, 0.53, 0.53); })
+  const newGroup = new THREE.Group()
+  newGroup.add(bloodGroup)
+  newGroup.add(rightAtriumGroup)
+  newGroup.add(rightAtriumShellGroup)
 
-  leftAtriumGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.64, 0.66, 0.8) })
-  leftAtriumShellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.1, 0.66, 0.8) })
-  VentricleGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.48, 0.52, 0.72) })
-  shellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.81, 0.51, 0.70) })
-  aortaGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.88, 0.53, 0.53) })
-  aortaShellGroup.traverse((mesh) => { mesh.userData.color = new THREE.Vector3(0.38, 0.53, 0.53) })
+  newGroup.add(leftAtriumGroup)
+  newGroup.add(leftAtriumShellGroup)
 
-  const backGroup = new THREE.Group()
-  backGroup.add(bloodGroup)
-  backGroup.add(rightAtriumGroup)
-  backGroup.add(rightAtriumShellGroup)
+  newGroup.add(VentricleGroup)
+  newGroup.add(shellGroup)
 
-  backGroup.add(leftAtriumGroup)
-  backGroup.add(leftAtriumShellGroup)
+  newGroup.add(aortaGroup)
+  newGroup.add(aortaShellGroup)
 
-  backGroup.add(VentricleGroup)
-  backGroup.add(shellGroup)
-
-  backGroup.add(aortaGroup)
-  backGroup.add(aortaShellGroup)
-
-  prepareScence(backGroup)
+  prepareScence(newGroup, { textureMap1, textureMap2, textureMap3, normalMap1, normalMap2, normalMap3 })
   GameLoop();
 });
 
