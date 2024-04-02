@@ -5,19 +5,21 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 const Matrix4 = THREE.Matrix4;
 const scene = new THREE.Scene();
 
-// var camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, viewR, -viewR);
-var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
-var renderer = new THREE.WebGLRenderer();
-camera.position.z = 5;
+const viewR = 4;
+const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR * 2, viewR * 2);
+// var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
+const renderer = new THREE.WebGLRenderer();
+camera.position.z = 0.6;
+// camera.position.y = 1;
 
-renderer.setSize(window.innerWidth, window.innerHeight);
+
+renderer.setSize(Math.min(window.innerWidth, window.innerHeight), Math.min(window.innerWidth, window.innerHeight));
 document.body.appendChild(renderer.domElement);
 
 window.addEventListener("resize", function () {
-  var height = window.innerHeight;
-  var width = window.innerWidth;
-  renderer.setSize(width, height);
-  camera.aspect = width / height;
+  const size = Math.min(window.innerWidth, window.innerHeight)
+  renderer.setSize(size, size);
+  camera.aspect = 1;
   camera.updateProjectionMatrix();
 });
 
@@ -31,29 +33,37 @@ new OrbitControls(camera, renderer.domElement);
 const prepareScence = (group, textures) => {
 
   const { textureMap1, textureMap2, textureMap3, normalMap1, normalMap2, normalMap3 } = textures;
-
   const circleR = 20;
   // 物体的基础旋转
   const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 12));
-
   const S = new Matrix4().makeScale(circleR, circleR, circleR);
-  const RX = new Matrix4().makeRotationX(-Math.PI / 2 - Math.PI / 8);
-  const RY = new Matrix4().makeRotationY(-Math.PI / 2);
+  const RX = new Matrix4().makeRotationX(-Math.PI / 2 - Math.PI / 6);
+  const RY = new Matrix4().makeRotationY(-Math.PI / 2 - Math.PI / 6);
   const RZ = new Matrix4().makeRotationX(Math.PI / 3);
   // 切面的旋转
-  const mat4 = new Matrix4().multiply(new Matrix4().copy(baseR).invert()).multiply(S).multiply(RX).multiply(RY).multiply(RZ);
+  const mat4 = new Matrix4().multiply(S).multiply(RX).multiply(RY).multiply(RZ);
 
   /** 心脏顶点着色器 */
   const vertexShader = `
     varying vec3 vPosition; // 在顶点着色器中声明一个 varying 变量
     varying vec3 vNormal; // 定义一个 varying 变量用于传递法线
     varying vec2 vUv; // 传递给片元着色器的UV值变量
+    varying mat3 TBN;
 
     void main() {
         vNormal = normalize(normalMatrix * normal); // 计算变换后的法线并传递给 varying 变量
-        vPosition = position; // 将顶点位置传递给插值变量
+        vec4 wPosition = modelViewMatrix * vec4(position, 1.0);
+        vPosition = wPosition.xyz; // 将顶点位置传递给插值变量
         vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+        // 计算切线空间矩阵
+        vec3 T = vec3(0.0, 1.0, 0.0); // 顶点位置
+        vec3 N = vNormal; // 顶点法向
+        vec3 B = cross(T, N); // 右手法则计算副切线
+        T = cross(N, B); // 修正切线
+        TBN = mat3(T, B, N); // 构建TBN矩阵
+
+        gl_Position = projectionMatrix * wPosition;
     }
   `;
 
@@ -63,43 +73,38 @@ const prepareScence = (group, textures) => {
         uniform float linearAttenuation;
         uniform float quadraticAttenuation;
         uniform vec3 sunPos;
+        uniform vec3 lightColor;
         uniform mat4 plane;
         uniform sampler2D textureMap;
         uniform sampler2D normalMap;
-        varying vec3 vNormal; // 接收从顶点着色器传递过来的法线
+        varying vec3 vNormal;
         varying vec3 vPosition;
         varying vec2 vUv;
+        varying mat3 TBN;
         
         void main() {
             vec4 pos = plane * vec4(vPosition, 1.0);
             float len = distance(sunPos, vPosition);
-        
-            vec3 normal = normalize(texture2D(normalMap, vUv).xyz);
-            // 纹理颜色
+            vec3 normal = normalize(TBN * texture2D(normalMap, vUv).xyz);
             vec3 textureColor = texture2D(textureMap, vUv).xyz;
-
-
-            if(gl_FrontFacing == false) {
-                textureColor = vec3(0.88, 0.53, 0.53);
-                // normal = -normal;
-                normal = vec3(0.0, 0.0, 1.0);
-            }
         
             // 计算距离衰减因子
             float attenuation = 1.0 / (constantAttenuation + linearAttenuation * len + quadraticAttenuation * len * len);
             vec3 light = normalize(sunPos - vPosition);
-            float alight = (max(dot(light, normal), 0.0)) ;
-        
-            // alight += 0.15;
-            // if(abs(pos.z) < 0.00002) {
-            //     gl_FragColor = vec4(0.2, 0.6, 0.2, 1.0);
-            // } else {
-                if(pos.z > 0.0) {
-                    discard;
-                } else {
-                    gl_FragColor = vec4(textureColor * alight, 1.0); // 设置像素颜色为半透明红色
-                }
-            // }
+            float alight = max(dot(light, normal), 0.0) * attenuation;
+
+            alight += 0.35;
+         
+            if(pos.z > 0.0) {
+                discard;
+            } else {
+                gl_FragColor = vec4(textureColor * lightColor * alight, 1.0);
+            }
+
+            if(gl_FrontFacing == false) {
+              // normal = -normal;
+              gl_FragColor = vec4(0.784, 0.46, 0.47, 1.0);
+            }
         }
   `
 
@@ -123,7 +128,7 @@ const prepareScence = (group, textures) => {
             // 计算距离衰减因子
             float attenuation = 1.0 / (constantAttenuation + linearAttenuation * len + quadraticAttenuation * len * len);
             vec3 light = normalize(sunPos - vPosition);
-            float alight = max(dot(light, normal) / 2.0, 0.0) * attenuation;
+            float alight = max(dot(light, normal), 0.0) * attenuation;
 
             alight += 0.25;
             if(pos.z < 0.0) {
@@ -135,11 +140,12 @@ const prepareScence = (group, textures) => {
       `
 
   const matElements = new Matrix4().copy(mat4).invert()
-  const sunPos = new THREE.Vector3(0.0, 0, 2.0);
+  const sunPos = new THREE.Vector3(0.0, 0, 5.0);
+  const lightColor = new THREE.Vector3(0.9, 0.9, 0.9)
 
   group.traverse((mesh) => {
-    if (mesh instanceof THREE.Mesh) {
-      const scale = 2;
+    if (mesh instanceof THREE.Mesh || mesh instanceof THREE.LineSegments) {
+      const scale = 1;
       mesh.position.set(0, 0, 0);
       mesh.scale.setScalar(scale);
       let textureMap = null, normalMap = null;
@@ -161,9 +167,10 @@ const prepareScence = (group, textures) => {
       }
 
       const uniforms = {
-        plane: { type: 'mat4', value: matElements },
         sunPos: { type: 'vec3', value: sunPos },
-        constantAttenuation: { type: 'float', value: 1.0 },
+        lightColor: { type: 'vec3', value: lightColor },
+        plane: { type: 'mat4', value: matElements },
+        constantAttenuation: { type: 'float', value: 1 },
         linearAttenuation: { type: 'float', value: 0.02 },
         quadraticAttenuation: { type: 'float', value: 0.005 },
         // baseColor: { type: 'vec3', value: mesh.userData.color },
@@ -247,6 +254,9 @@ const prepareScence = (group, textures) => {
   var directiontLight = new THREE.DirectionalLight(0xffffff, 1);
   scene.add(ambientLight);
   scene.add(directiontLight);
+
+  // scene.add(fillCircle)
+  // scene.add(edgesCircle)
 }
 
 // 加载心脏模型
@@ -292,7 +302,7 @@ loader.load('heart.obj', async (group) => {
     normalMap1, normalMap2, normalMap3
   ] = await loadTextures([
     // 纹理
-    'Tex_0058.png', 'Tex_0414.png', 'Tex_0053.png', 
+    'Tex_0058.png', 'Tex_0414.png', 'Tex_0053.png',
     // 法线
     'Tex_0057.png', 'Tex_0177.png', 'Tex_0050.png',
   ])
@@ -317,38 +327,43 @@ loader.load('heart.obj', async (group) => {
   const aortaGroup = new THREE.Group()
   /** 主动脉壳 */
   const aortaShellGroup = new THREE.Group();
-  group.remove(group.children[0]);
-  group.remove(group.children[0]);
-  group.remove(group.children[0]);
-  group.remove(group.children[0]);
+
+  bloodGroup.add(group.children[0]);
+  bloodGroup.add(group.children[0]);
   bloodGroup.add(group.children[0]);
   bloodGroup.add(group.children[0]);
 
-  // /** 右心房 */
+  /** 右心房 */
   rightAtriumShellGroup.add(group.children[0])
-  // /** 右心房外壳 */
+  /** 右心房外壳 */
   rightAtriumGroup.add(group.children[0]);
 
-  // /** 左心房 */
+  /** 左心房 */
   leftAtriumShellGroup.add(group.children[0]);
   leftAtriumGroup.add(group.children[0])
-  // /** 主动脉 */
+  /** 主动脉 */
   aortaGroup.add(group.children[0]);
   /** 主动脉壳 */
-  group.remove(group.children[0]);
-
-  aortaGroup.add(group.children[0]);
   aortaShellGroup.add(group.children[0]);
-  aortaGroup.add(group.children[0]);
+
+  const shellMesh = new THREE.Mesh(group.children[0].geometry, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+  shellGroup.add(shellMesh);
+  group.remove(group.children[0])
+  // 心室相关
+  VentricleGroup.add(group.children[0]);
+
+  // aortaGroup.add(group.children[0]);
   // aortaShellGroup.add(group.children[0]);
+  // aortaGroup.add(group.children[0]);
+  // // aortaShellGroup.add(group.children[0]);
 
   bloodGroup.traverse((mesh) => { mesh.userData.type = 2 })
   rightAtriumGroup.traverse((mesh) => { mesh.userData.type = 3 })
   rightAtriumShellGroup.traverse((mesh) => { mesh.userData.type = 1 })
   leftAtriumGroup.traverse((mesh) => { mesh.userData.type = 3 })
   leftAtriumShellGroup.traverse((mesh) => { mesh.userData.type = 1 })
-  VentricleGroup.traverse((mesh) => { mesh.userData.type = 3 })
-  shellGroup.traverse((mesh) => { mesh.userData.type = 1 })
+  VentricleGroup.traverse((mesh) => { mesh.userData.type = 1 })
+  shellGroup.traverse((mesh) => { mesh.userData.type = 3 })
   aortaGroup.traverse((mesh) => { mesh.userData.type = 1 })
   aortaShellGroup.traverse((mesh) => { mesh.userData.type = 3 })
 
