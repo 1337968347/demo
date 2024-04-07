@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { prepareCoronary } from './mesh/coronary'
+
 
 const Matrix4 = THREE.Matrix4;
 const scene = new THREE.Scene();
@@ -9,9 +11,7 @@ const viewR = 4;
 const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR * 2, viewR * 2);
 // var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-camera.position.z = 0.6;
-// camera.position.y = 1;
-
+// camera.position.z = 0.3;
 
 renderer.setSize(Math.min(window.innerWidth, window.innerHeight), Math.min(window.innerWidth, window.innerHeight));
 document.body.appendChild(renderer.domElement);
@@ -23,28 +23,15 @@ window.addEventListener("resize", function () {
   camera.updateProjectionMatrix();
 });
 
-new OrbitControls(camera, renderer.domElement);
+// new OrbitControls(camera, renderer.domElement);
 
 /**
  * 
  * @param {THREE.Group} group 
  */
 const prepareScence = async (group) => {
-  const [
-    textureMap1, textureMap2, textureMap3,
-    normalMap1, normalMap2, normalMap3
-  ] = await loadTextures([
-    // 纹理
-    'Tex_0058.png', 'Tex_0414.png', 'Tex_0053.png',
-    // 法线
-    'Tex_0057.png', 'Tex_0177.png', 'Tex_0050.png',
-  ]);
 
-  const [vertexShader, fragmentShaderBack, fragmentShaderFront] = await loadShaders(['coronary.vert', 'coronary_back.frag', 'coronary_front.frag']);
-
-  const circleR = 20;
-  // 物体的基础旋转
-  const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 12));
+  const circleR = 2;
   const S = new Matrix4().makeScale(circleR, circleR, circleR);
   const RX = new Matrix4().makeRotationX(-Math.PI / 2 - Math.PI / 6);
   const RY = new Matrix4().makeRotationY(-Math.PI / 2 - Math.PI / 6);
@@ -52,81 +39,7 @@ const prepareScence = async (group) => {
   // 切面的旋转
   const mat4 = new Matrix4().multiply(S).multiply(RX).multiply(RY).multiply(RZ);
 
-  const matElements = new Matrix4().copy(mat4).invert()
-  const sunPos = new THREE.Vector3(0.0, 0, 5.0);
-  const lightColor = new THREE.Vector3(0.9, 0.9, 0.9)
-
-  group.traverse((mesh) => {
-    if (mesh instanceof THREE.Mesh || mesh instanceof THREE.LineSegments) {
-      const scale = 1;
-      mesh.position.set(0, 0, 0);
-      mesh.scale.setScalar(scale);
-      let textureMap = null, normalMap = null;
-      switch (mesh.userData.type) {
-        case 1:
-          textureMap = textureMap1;
-          normalMap = normalMap1;
-          break;
-        case 2:
-          textureMap = textureMap2;
-          normalMap = normalMap2;
-          break;
-        case 3:
-          textureMap = textureMap3;
-          normalMap = normalMap3;
-          break;
-        default:
-          break;
-      }
-
-      const uniforms = {
-        sunPos: { type: 'vec3', value: sunPos },
-        lightColor: { type: 'vec3', value: lightColor },
-        plane: { type: 'mat4', value: matElements },
-        constantAttenuation: { type: 'float', value: 1 },
-        linearAttenuation: { type: 'float', value: 0.02 },
-        quadraticAttenuation: { type: 'float', value: 0.005 },
-        // baseColor: { type: 'vec3', value: mesh.userData.color },
-        textureMap: { type: 'sampler2D', value: textureMap },
-        normalMap: { type: 'sampler2D', value: normalMap },
-      }
-
-      /** 心脏背面 后侧不透明 */
-      const coronaryBackMaterial = new THREE.ShaderMaterial({
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShaderBack,
-        side: THREE.DoubleSide,
-        transparent: false,
-        uniforms: uniforms
-      });
-
-      const backMesh = mesh.clone();
-      const frontMesh = mesh.clone();
-      backMesh.material = coronaryBackMaterial;
-      backMesh.applyMatrix4(baseR);
-      scene.add(backMesh);
-
-      /** 心脏前面  前侧透明 */
-      const coronaryFrontMaterial = new THREE.ShaderMaterial({
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShaderFront,
-        // side: THREE.DoubleSide,
-        transparent: false,
-        depthTest: true,
-        depthWrite: false,
-        uniforms: uniforms,
-
-        blending: THREE.CustomBlending, // 设置自定义混合模式
-        blendSrc: THREE.SrcAlphaFactor, // 设置源混合因子
-        blendDst: THREE.OneMinusSrcAlphaFactor, // 设置目标混合因子
-        blendEquation: THREE.AddEquation // 设置混合方程
-      });
-
-      frontMesh.material = coronaryFrontMaterial;
-      frontMesh.applyMatrix4(baseR);
-      // scene.add(frontMesh);
-    }
-  })
+  await prepareCoronary(group, scene, mat4);
 
   // 加载扇形扫描区域
   const fillGeometry = new THREE.CircleGeometry(1, 10, -Math.PI / 7, Math.PI / 3.5);
@@ -168,54 +81,10 @@ const prepareScence = async (group) => {
   scene.add(ambientLight);
   scene.add(directiontLight);
 
-  // scene.add(fillCircle)
-  // scene.add(edgesCircle)
+  scene.add(fillCircle)
+  scene.add(edgesCircle)
 
   GameLoop();
-}
-
-// 加载心脏模型
-const loader = new OBJLoader();
-const textLoader = new THREE.TextureLoader();
-
-/**
- * 加载一堆纹理
- * @param {String[]} urls 
- */
-const loadTextures = async (urls) => {
-  const promises = urls.map((url) => {
-    return new Promise((resolve, reject) => {
-      textLoader.load(
-        'textures/' + url,
-        (texture) => {
-          resolve(texture)
-        },
-        undefined,
-        // onError callback
-        (err) => {
-          reject('An error happened.')
-        }
-      );
-    })
-  })
-  return await Promise.all(promises)
-}
-
-/**
- * 加载着色器
- * @param {String[]} urls 
- * @returns 
- */
-const loadShaders = async (urls) => {
-  const promises = urls.map((url) => {
-    return new Promise((resolve, reject) => {
-      fetch('shaders/' + url).then(response => response.text())
-        .then(data => {
-          resolve(data)
-        });
-    })
-  })
-  return await Promise.all(promises)
 }
 
 var render = function () {
@@ -226,6 +95,9 @@ var GameLoop = function () {
   requestAnimationFrame(GameLoop);
   render();
 };
+
+const loader = new OBJLoader();
+
 
 loader.load('heart.obj', async (group) => {
 
