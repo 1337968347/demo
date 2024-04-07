@@ -8,7 +8,7 @@ const scene = new THREE.Scene();
 const viewR = 4;
 const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR * 2, viewR * 2);
 // var camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 100);
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 camera.position.z = 0.6;
 // camera.position.y = 1;
 
