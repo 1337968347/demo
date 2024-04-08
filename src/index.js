@@ -11,7 +11,6 @@ const scene = new THREE.Scene();
 const viewR = 4;
 const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR * 2, viewR * 2);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-camera.position.z = 0.3;
 
 let size = Math.min(window.innerWidth, window.innerHeight)
 renderer.setSize(size, size);
@@ -23,7 +22,9 @@ window.addEventListener("resize", function () {
   camera.aspect = 1;
   camera.updateProjectionMatrix();
 });
+
 new OrbitControls(camera, renderer.domElement);
+
 const globalUniform = {
   probePos: new THREE.Vector3(0, 6, 0),
   probeDirection: new THREE.Vector3(0, 0, -90),

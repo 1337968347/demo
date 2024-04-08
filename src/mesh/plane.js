@@ -11,7 +11,7 @@ export const preparePlane = async (scene) => {
     const fillMaterial = new THREE.MeshLambertMaterial({
         color: 0x00ff00,
         side: THREE.DoubleSide, // 设置双面渲染
-        opacity: 0.3,
+        opacity: 0.2,
         depthTest: true,
         depthWrite: true,
         transparent: true,

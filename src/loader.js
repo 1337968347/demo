@@ -58,7 +58,6 @@ export const loadCoronaryGroup = () => {
             const innerGroup = new THREE.Group();
             // 心脏里面的血管
             const bloodGroup = new THREE.Group();
-            const demoGroup = new THREE.Group();
             
             bloodGroup.add(group.children[0]);
             bloodGroup.add(group.children[0]);

@@ -1,10 +1,9 @@
-varying vec3 vPosition; // 在顶点着色器中声明一个 varying 变量
-varying vec3 vNormal; // 定义一个 varying 变量用于传递法线
-varying vec2 vUv; // 传递给片元着色器的UV值变量
+varying vec3 vPosition;
+varying vec2 vUv;
 varying mat3 TBN;
 
 void main() {
-    vNormal = normalize(normalMatrix * normal); // 计算变换后的法线并传递给 varying 变量
+    vec3 vNormal = normalize(normalMatrix * normal); // 计算变换后的法线并传递给 varying 变量
     vec4 wPosition = modelViewMatrix * vec4(position, 1.0);
     vPosition = wPosition.xyz; // 将顶点位置传递给插值变量
     vUv = uv;
