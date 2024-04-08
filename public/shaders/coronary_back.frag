@@ -23,14 +23,17 @@ void main() {
 
     alight += 0.25;
 
-    if(pos.z >= 0.0) {
+    if(pos.z >= 0.1) {
         discard;
     } else {
         gl_FragColor = vec4(textureColor * lightColor * alight, 1.0);
     }
 
     if(gl_FrontFacing == false) {
-              // normal = -normal;
-        gl_FragColor = vec4(0.784, 0.46, 0.47, 1.0);
+        if(abs(pos.z) < 0.1) {
+            gl_FragColor = vec4(0.92, 0.4, 0.42, 1.0);
+        } else {
+            gl_FragColor = vec4(0.784, 0.46, 0.47, 1.0);
+        }
     }
 }
