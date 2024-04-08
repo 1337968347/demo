@@ -47,79 +47,63 @@ export const loadShaders = async (urls) => {
     return await Promise.all(promises)
 }
 
-
 /**
  * 处理加载冠脉mesh
- * @returns 
+ * @returns {THREE.Group}
  */
 export const loadCoronaryGroup = () => {
     return new Promise((resolve) => {
         loader.load('heart.obj', async (group) => {
+            const shellGroup = new THREE.Group();
+            const innerGroup = new THREE.Group();
             // 心脏里面的血管
             const bloodGroup = new THREE.Group();
+            const demoGroup = new THREE.Group();
+            
+            bloodGroup.add(group.children[0]);
+            bloodGroup.add(group.children[0]);
+            bloodGroup.add(group.children[0]);
+            shellGroup.add(group.children[0])
             /** 右心房 */
-            const rightAtriumGroup = new THREE.Group();
+            innerGroup.add(group.children[0])
             /** 右心房外壳 */
-            const rightAtriumShellGroup = new THREE.Group();
-            // 左心房
-            const leftAtriumGroup = new THREE.Group();
-            /** 左心房外壳 */
-            const leftAtriumShellGroup = new THREE.Group();
-            /** 心室 */
-            const VentricleGroup = new THREE.Group();
-            /** 壳 */
-            const shellGroup = new THREE.Group();
-            /** 主动脉 */
-            const aortaGroup = new THREE.Group()
-            /** 主动脉壳 */
-            const aortaShellGroup = new THREE.Group();
-            bloodGroup.add(group.children[0]);
-            bloodGroup.add(group.children[0]);
-            bloodGroup.add(group.children[0]);
-            bloodGroup.add(group.children[0]);
-            /** 右心房 */
-            rightAtriumShellGroup.add(group.children[0])
-            /** 右心房外壳 */
-            rightAtriumGroup.add(group.children[0]);
+            shellGroup.add(group.children[0]);
             /** 左心房 */
-            leftAtriumShellGroup.add(group.children[0]);
-            leftAtriumGroup.add(group.children[0])
+            innerGroup.add(group.children[0]);
+            bloodGroup.add(group.children[0])
             /** 主动脉 */
-            aortaGroup.add(group.children[0]);
+            shellGroup.add(group.children[0]);
             /** 主动脉壳 */
             const aortaShellMesh = new THREE.Mesh(group.children[0].geometry, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-            aortaShellGroup.add(aortaShellMesh);
+            innerGroup.add(aortaShellMesh);
             group.remove(group.children[0])
             shellGroup.add(group.children[0]);
             // 心室相关
-            VentricleGroup.add(group.children[0]);
+            innerGroup.add(group.children[0]);
 
             bloodGroup.traverse((mesh) => { mesh.userData.type = 2 })
-            rightAtriumGroup.traverse((mesh) => { mesh.userData.type = 3 })
-            rightAtriumShellGroup.traverse((mesh) => { mesh.userData.type = 1 })
-            leftAtriumGroup.traverse((mesh) => { mesh.userData.type = 3 })
-            leftAtriumShellGroup.traverse((mesh) => { mesh.userData.type = 1 })
-            VentricleGroup.traverse((mesh) => { mesh.userData.type = 1 })
-            shellGroup.traverse((mesh) => { mesh.userData.type = 3 })
-            aortaGroup.traverse((mesh) => { mesh.userData.type = 1 })
-            aortaShellGroup.traverse((mesh) => { mesh.userData.type = 3 })
+            shellGroup.traverse((mesh) => { mesh.userData.type = 1 })
+            innerGroup.traverse((mesh) => { mesh.userData.type = 3 })
 
             const newGroup = new THREE.Group()
-            newGroup.add(bloodGroup)
-            newGroup.add(rightAtriumGroup)
-            newGroup.add(rightAtriumShellGroup)
-
-            newGroup.add(leftAtriumGroup)
-            newGroup.add(leftAtriumShellGroup)
-
-            newGroup.add(VentricleGroup)
             newGroup.add(shellGroup)
-
-            newGroup.add(aortaGroup)
-            newGroup.add(aortaShellGroup)
+            newGroup.add(innerGroup)
+            newGroup.add(bloodGroup)
 
             resolve(newGroup)
         });
 
+    })
+}
+
+/**
+ * 加载超声探头
+ */
+export const loadCoronaryProbe = () => {
+    return new Promise((resolve) => {
+        loader.load('probe.obj', async (group) => {
+
+            resolve(group)
+        })
     })
 }

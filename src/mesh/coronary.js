@@ -94,7 +94,7 @@ export const prepareCoronary = async (group, scene) => {
             });
 
             frontMesh.material = coronaryFrontMaterial;
-            scene.add(frontMesh);
+            // scene.add(frontMesh);
         }
     })
 
