@@ -7,10 +7,9 @@ const Matrix4 = THREE.Matrix4;
  * 准备冠脉Mesh
  * @param {THREE.Group} group 
  * @param {THREE.Scene} scene 
- * @param {THREE.Matrix4} planeMat4 
  * @returns 
  */
-export const prepareCoronary = async (group, scene, planeMat4) => {
+export const prepareCoronary = async (group, scene) => {
 
     const [
         textureMap1, textureMap2, textureMap3,
@@ -25,10 +24,7 @@ export const prepareCoronary = async (group, scene, planeMat4) => {
     /** 加载着色器 */
     const [vertexShader, fragmentShaderBack, fragmentShaderFront] = await loadShaders(['coronary.vert', 'coronary_back.frag', 'coronary_front.frag']);
 
-    // 物体的基础旋转
-    const baseR = new Matrix4().makeRotationY(- Math.PI / 4).multiply(new Matrix4().makeRotationX(Math.PI / 12));
-
-    const matElements = new Matrix4().copy(planeMat4).invert()
+    const matElements = new Matrix4()
     const sunPos = new THREE.Vector3(0.0, 0, 5.0);
     const lightColor = new THREE.Vector3(0.9, 0.9, 0.9)
 
@@ -77,8 +73,8 @@ export const prepareCoronary = async (group, scene, planeMat4) => {
 
             const backMesh = mesh.clone();
             const frontMesh = mesh.clone();
+            backMesh.name = 'coronaryBack';
             backMesh.material = coronaryBackMaterial;
-            backMesh.applyMatrix4(baseR);
             scene.add(backMesh);
 
             /** 心脏前面  前侧透明 */
@@ -98,8 +94,7 @@ export const prepareCoronary = async (group, scene, planeMat4) => {
             });
 
             frontMesh.material = coronaryFrontMaterial;
-            frontMesh.applyMatrix4(baseR);
-            // scene.add(frontMesh);
+            scene.add(frontMesh);
         }
     })
 
