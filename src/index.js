@@ -43,7 +43,7 @@ const prepareScence = async () => {
   const coronaryProbe = await loadCoronaryProbe();
   await prepareCoronary(coronaryGroup, scene, globalUniform);
   await preparePlane(scene)
-  prepareProbe(coronaryProbe.children[0].geometry, scene, globalUniform)
+  await prepareProbe(coronaryProbe.children[0].geometry, scene, globalUniform)
 
   tick();
 }
