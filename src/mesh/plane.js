@@ -3,10 +3,12 @@ import * as THREE from 'three';
 /**
  * 准备扇形切面
  * @param {THREE.Scene} scene 
+ * @param {{[key: string]: THREE.Group}} globalUniform 
  */
-export const preparePlane = async (scene) => {
+export const preparePlane = async (scene, globalUniform) => {
+
     // 加载扇形扫描区域
-    const fillGeometry = new THREE.CircleGeometry(1, 10, -Math.PI / 5, Math.PI / 2.5);
+    const fillGeometry = new THREE.CircleGeometry(1, 10, -Math.PI / 5, globalUniform.probeAngleSize);
     // 填充材质
     const fillMaterial = new THREE.MeshLambertMaterial({
         color: 0xffffff,
@@ -22,19 +24,19 @@ export const preparePlane = async (scene) => {
     });
     const fillCircle = new THREE.Mesh(fillGeometry, fillMaterial);
     // 创建边框扇形
-    const edgesGeometry = new THREE.EdgesGeometry(fillGeometry);
-    // 创建边缘材质
-    const edgesMaterial = new THREE.LineBasicMaterial({
-        color: 0x00ff00, // 设置边框颜色
-        linewidth: 10, // 设置边框宽度
-        transparent: true
-    });
-    // 创建只包含扇形边缘的线条对象
-    const edgesCircle = new THREE.LineSegments(edgesGeometry, edgesMaterial);
     fillCircle.name = 'fillPlaneMesh';
-    edgesCircle.name = 'edgesPlaneMesh';
+
+    const geometry = new THREE.CylinderGeometry(0.01, 0.01, 1, 6);
+    // 创建边缘材质
+    const lineMaterialL = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+    const lineMaterialR = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+    const probeLineL = new THREE.Mesh(geometry, lineMaterialL);
+    probeLineL.name = 'edgesPlaneMeshL';
+    const probeLineR = new THREE.Mesh(geometry, lineMaterialR);
+    probeLineR.name = 'edgesPlaneMeshR';
     scene.add(fillCircle)
-    scene.add(edgesCircle)
+    scene.add(probeLineL)
+    scene.add(probeLineR)
 
     return {}
 }
