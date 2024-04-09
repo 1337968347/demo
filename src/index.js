@@ -10,12 +10,16 @@ const Matrix4 = THREE.Matrix4;
 
 const scene = new THREE.Scene();
 const viewR = 7;
-const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR * 2, viewR * 2);
+const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR, viewR);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 
 let size = Math.min(window.innerWidth, window.innerHeight)
 renderer.setSize(size, size);
+const canvas2d = document.createElement('canvas');
+const ctx = canvas2d.getContext('2d');
+
 document.body.appendChild(renderer.domElement);
+document.body.appendChild(canvas2d);
 
 window.addEventListener("resize", function () {
   size = Math.min(window.innerWidth, window.innerHeight)
@@ -27,7 +31,7 @@ window.addEventListener("resize", function () {
 new OrbitControls(camera, renderer.domElement);
 
 const globalUniform = {
-  probePos: new THREE.Vector3(0, 3.5, 0),
+  probePos: new THREE.Vector3(0, 4.5, 2),
   probeDirection: new THREE.Vector3(0, 0, -90),
   sunPos: new THREE.Vector3(0.0, 0, 5.0),
   lightColor: new THREE.Vector3(0.9, 0.9, 0.9),
@@ -54,14 +58,16 @@ prepareScence()
 
 
 var render = function () {
-  if (globalUniform.probeDirection.x >= 30) {
+  if (globalUniform.probeDirection.x >= 40) {
     globalUniform.probeDirection.x = -30
   }
+  // if (globalUniform.probePos.y >= 3) {
+  //   globalUniform.probePos.y = -1
+  // }
   globalUniform.probeDirection.x += 0.1;
+  globalUniform.probeDirection.z += 0.1;
+  // globalUniform.probePos.y += 0.01;
 
-  // globalUniform.probePos.x += Math.random() / 100
-  // globalUniform.probeDirection.y += Math.random();
-  // globalUniform.probeDirection.z += Math.random();
   const T = new Matrix4().makeTranslation(globalUniform.probePos);
   const R = new Matrix4().makeRotationFromEuler(new THREE.Euler(
     THREE.MathUtils.degToRad(globalUniform.probeDirection.x),
@@ -72,21 +78,30 @@ var render = function () {
   /******************平面相关****************************/
   const fillMesh = scene.getObjectByName('fillPlaneMesh');
   const lineMeshL = scene.getObjectByName('edgesPlaneMeshL');
-  const lineMeshR = scene.getObjectByName('edgesPlaneMeshR')
+  const lineMeshR = scene.getObjectByName('edgesPlaneMeshR');
+  const tipMesh = scene.getObjectByName('probeText');
   const planeScale = 8;
   const S = new Matrix4().makeScale(planeScale, planeScale, planeScale);
-  const planeMat4 = new Matrix4().multiply(T).multiply(S).multiply(R);
+  const planeMat4 = new Matrix4().multiply(T).multiply(R).multiply(S);
   fillMesh && (fillMesh.matrixAutoUpdate = false); // 禁止自动更新矩阵
-  lineMeshL && (lineMeshL.matrixAutoUpdate = false)
-  lineMeshR && (lineMeshR.matrixAutoUpdate = false)
+  lineMeshL && (lineMeshL.matrixAutoUpdate = false);
+  lineMeshR && (lineMeshR.matrixAutoUpdate = false);
+  tipMesh && (tipMesh.matrixAutoUpdate = false);
+
   const lineOffset = new Matrix4().makeRotationZ(globalUniform.probeAngleSize / 2);
 
   const probeLineLocalMat4 = new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(-90))
     .multiply(new Matrix4().makeTranslation(0, 0.5, 0));
-    
+
   fillMesh && (fillMesh.matrix = planeMat4);
-  lineMeshL && (lineMeshL.matrix = new Matrix4().copy(planeMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
-  lineMeshR && (lineMeshR.matrix = new Matrix4().copy(planeMat4).multiply(lineOffset.invert()).multiply(probeLineLocalMat4));
+  lineMeshL && (lineMeshL.matrix = new Matrix4().multiply(planeMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
+  lineMeshR && (lineMeshR.matrix = new Matrix4().multiply(planeMat4).multiply(new Matrix4().copy(lineOffset).invert()).multiply(probeLineLocalMat4));
+
+  // 探头文字相关
+  const tipOffset = new Matrix4().multiply(T).multiply(R).multiply(new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(50)))
+    .multiply(new Matrix4().makeTranslation(3, 0, 0));
+
+  tipMesh && (tipMesh.matrix = new Matrix4().multiply(tipOffset));
   /**********************************************/
 
   /*****************心脏相关**********************/
@@ -110,6 +125,7 @@ var render = function () {
   probeMesh.matrixAutoUpdate = false; // 禁止自动更新矩阵
   probeMesh.matrix = new Matrix4().multiply(T).multiply(R).multiply(probeMat4);
   /**********************************************/
+
 
   renderer.render(scene, camera);
 };

@@ -81,10 +81,10 @@ export const prepareCoronary = async (group, scene, globalUniform) => {
                     vertexShader: vertexShader,
                     fragmentShader: fragmentShaderFront,
                     transparent: false,
+                    uniforms: uniforms,
                     depthTest: true,
                     depthWrite: false,
-                    uniforms: uniforms,
-
+                    
                     blending: THREE.CustomBlending, // 设置自定义混合模式
                     blendSrc: THREE.SrcAlphaFactor, // 设置源混合因子
                     blendDst: THREE.OneMinusSrcAlphaFactor, // 设置目标混合因子

@@ -25,7 +25,7 @@ void main() {
     if(pos.z < 0.1) {
         discard;
     } else {
-        gl_FragColor = vec4(textureColor * lightColor * alight, 0.15);
+        gl_FragColor = vec4(textureColor * lightColor * alight, 0.25);
     }
 
     if(gl_FrontFacing == false) {

@@ -8,7 +8,7 @@ import * as THREE from 'three';
 export const preparePlane = async (scene, globalUniform) => {
 
     // 加载扇形扫描区域
-    const fillGeometry = new THREE.CircleGeometry(1, 10, -Math.PI / 5, globalUniform.probeAngleSize);
+    const fillGeometry = new THREE.CircleGeometry(1, 15, -Math.PI / 5, globalUniform.probeAngleSize);
     // 填充材质
     const fillMaterial = new THREE.MeshLambertMaterial({
         color: 0xffffff,
@@ -25,8 +25,7 @@ export const preparePlane = async (scene, globalUniform) => {
     const fillCircle = new THREE.Mesh(fillGeometry, fillMaterial);
     // 创建边框扇形
     fillCircle.name = 'fillPlaneMesh';
-
-    const geometry = new THREE.CylinderGeometry(0.01, 0.01, 1, 6);
+    const geometry = new THREE.CylinderGeometry(0.007, 0.007, 1, 6);
     // 创建边缘材质
     const lineMaterialL = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
     const lineMaterialR = new THREE.MeshPhongMaterial({ color: 0xff0000 });
@@ -34,9 +33,24 @@ export const preparePlane = async (scene, globalUniform) => {
     probeLineL.name = 'edgesPlaneMeshL';
     const probeLineR = new THREE.Mesh(geometry, lineMaterialR);
     probeLineR.name = 'edgesPlaneMeshR';
+
+    // 创建P图标
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 32;
+    canvas.height = 32;
+
+    // 2. 设置文字样式
+    context.font = '25px Arial';
+    context.fillStyle = 'red';
+    context.fillText('P', 6, 27);
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+    sprite.name = 'probeText';
+
     scene.add(fillCircle)
     scene.add(probeLineL)
     scene.add(probeLineR)
-
+    scene.add(sprite)
     return {}
 }
