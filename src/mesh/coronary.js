@@ -26,6 +26,9 @@ export const prepareCoronary = async (group, scene, globalUniform) => {
     const [vertexShader, fragmentShaderBack, fragmentShaderFront] = await loadShaders(['coronary.vert', 'coronary_back.frag', 'coronary_front.frag']);
     const matElements = new Matrix4()
 
+    const backGroup = new THREE.Group();
+    const frontGroup = new THREE.Group();
+
     group.traverse((mesh) => {
         if (mesh instanceof THREE.Mesh || mesh instanceof THREE.LineSegments) {
             const scale = 1;
@@ -53,11 +56,14 @@ export const prepareCoronary = async (group, scene, globalUniform) => {
                 sunPos: { type: 'vec3', value: globalUniform.sunPos },
                 lightColor: { type: 'vec3', value: globalUniform.lightColor },
                 plane: { type: 'mat4', value: matElements },
-                constantAttenuation: { type: 'float', value: 1 },
-                linearAttenuation: { type: 'float', value: 0.02 },
-                quadraticAttenuation: { type: 'float', value: 0.005 },
+                constantAttenuation: { type: 'float', value: 1.0 },
+                linearAttenuation: { type: 'float', value: 0.015 },
+                quadraticAttenuation: { type: 'float', value: 0.003 },
                 textureMap: { type: 'sampler2D', value: textureMap },
                 normalMap: { type: 'sampler2D', value: normalMap },
+                lineL: { type: 'vec3', value: new THREE.Vector3() },
+                lineR: { type: 'vec3', value: new THREE.Vector3() },
+                probePos: { type: 'vec3', value: globalUniform.probePos }
             }
 
             /** 心脏背面 后侧不透明 */
@@ -66,14 +72,14 @@ export const prepareCoronary = async (group, scene, globalUniform) => {
                 fragmentShader: fragmentShaderBack,
                 side: THREE.DoubleSide,
                 transparent: false,
-                uniforms: uniforms
+                uniforms: uniforms,
             });
 
             const backMesh = mesh.clone();
             const frontMesh = mesh.clone();
-            backMesh.name = 'coronaryBack';
+            backMesh.name = 'coronary';
             backMesh.material = coronaryBackMaterial;
-            scene.add(backMesh);
+            backGroup.add(backMesh);
 
             if (mesh.userData.type === 1) {
                 /** 心脏前面  前侧透明 */
@@ -84,19 +90,18 @@ export const prepareCoronary = async (group, scene, globalUniform) => {
                     uniforms: uniforms,
                     depthTest: true,
                     depthWrite: false,
-                    
-                    blending: THREE.CustomBlending, // 设置自定义混合模式
-                    blendSrc: THREE.SrcAlphaFactor, // 设置源混合因子
-                    blendDst: THREE.OneMinusSrcAlphaFactor, // 设置目标混合因子
-                    blendEquation: THREE.AddEquation // 设置混合方程
+                    blending: THREE.CustomBlending,
+                    blendSrc: THREE.SrcAlphaFactor,
+                    blendDst: THREE.OneMinusSrcAlphaFactor,
+                    blendEquation: THREE.AddEquation
                 });
 
                 frontMesh.material = coronaryFrontMaterial;
-                scene.add(frontMesh);
+                frontMesh.name = 'coronary';
+                frontGroup.add(frontMesh);
             }
         }
     })
 
-
-    return group
+    return { backGroup, frontGroup }
 }

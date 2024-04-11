@@ -23,6 +23,5 @@ export const prepareProbe = async (geometry, scene, globalUniform) => {
     });
     const probeMesh = new THREE.Mesh(geometry, probeMaterial);
     probeMesh.name = 'probeMesh';
-    scene.add(probeMesh)
-    return {}
+    return probeMesh
 }

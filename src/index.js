@@ -9,17 +9,13 @@ const Matrix4 = THREE.Matrix4;
 
 
 const scene = new THREE.Scene();
-const viewR = 7;
+const viewR = 12;
 const camera = new THREE.OrthographicCamera(-viewR, viewR, viewR, -viewR, -viewR, viewR);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 
 let size = Math.min(window.innerWidth, window.innerHeight)
 renderer.setSize(size, size);
-const canvas2d = document.createElement('canvas');
-const ctx = canvas2d.getContext('2d');
-
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(canvas2d);
 
 window.addEventListener("resize", function () {
   size = Math.min(window.innerWidth, window.innerHeight)
@@ -31,24 +27,40 @@ window.addEventListener("resize", function () {
 new OrbitControls(camera, renderer.domElement);
 
 const globalUniform = {
-  probePos: new THREE.Vector3(0, 4.5, 2),
+  /** 探头实时切面 */
+  probePos: new THREE.Vector3(0, 4.5, 0),
   probeDirection: new THREE.Vector3(0, 0, -90),
-  sunPos: new THREE.Vector3(0.0, 0, 5.0),
-  lightColor: new THREE.Vector3(0.9, 0.9, 0.9),
-  probeAngleSize: THREE.MathUtils.degToRad(72)
+  /** 标准实时切面 */
+  sProbePos: new THREE.Vector3(-3, 0.5, 0),
+  sProbeDirection: new THREE.Vector3(0, 0, 0),
+
+  probeAngleSize: THREE.MathUtils.degToRad(60),
+  /** 标准切面 */
+  sunPos: new THREE.Vector3(0.0, 1.0, 6.0),
+  lightColor: new THREE.Vector3(0.9, 0.9, 0.9)
 }
+/** 实时探头平面 */
+let realTimeProbePlane = null;
+/** 标准探头平面 */
+let normProbePlane = null;
+let coronaryBack = null;
+let coronaryFront = null;
+let probe = null;
+let ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+let directiontLight = new THREE.DirectionalLight(0xffffff, 0.5);
 
 const prepareScence = async () => {
 
-  var ambientLight = new THREE.AmbientLight(0xffffff, 0.2)
-  var directiontLight = new THREE.DirectionalLight(0xffffff, 0.5);
-  scene.add(ambientLight);
-  scene.add(directiontLight);
-  const coronaryGroup = await loadCoronaryGroup();
-  const coronaryProbe = await loadCoronaryProbe();
-  await prepareCoronary(coronaryGroup, scene, globalUniform);
-  await preparePlane(scene, globalUniform);
-  await prepareProbe(coronaryProbe.children[0].geometry, scene, globalUniform);
+  /** 加载模型 */
+  const coronaryMeshGroup = await loadCoronaryGroup();
+  const coronaryProbeMesh = await loadCoronaryProbe();
+  // 初始化 材质
+  const { backGroup, frontGroup } = await prepareCoronary(coronaryMeshGroup, scene, globalUniform);
+  realTimeProbePlane = await preparePlane(scene, globalUniform, { planeColor: 0xffffff, isNorm: false });
+  normProbePlane = await preparePlane(scene, globalUniform, { planeColor: 0xAAAAAA, isNorm: true });
+  probe = await prepareProbe(coronaryProbeMesh.children[0].geometry, scene, globalUniform);
+  coronaryBack = backGroup;
+  coronaryFront = frontGroup;
 
   tick();
 }
@@ -58,15 +70,33 @@ prepareScence()
 
 
 var render = function () {
-  if (globalUniform.probeDirection.x >= 40) {
-    globalUniform.probeDirection.x = -30
-  }
-  // if (globalUniform.probePos.y >= 3) {
-  //   globalUniform.probePos.y = -1
+
+  // 清空场景中的所有对象
+  scene.children.forEach(child => {
+    scene.remove(child);
+  });
+
+  scene.add(coronaryBack)
+  scene.add(coronaryFront)
+  scene.add(realTimeProbePlane)
+  scene.add(probe)
+  scene.add(normProbePlane)
+  scene.add(ambientLight)
+  scene.add(directiontLight)
+
+  // if (globalUniform.probeDirection.x >= 40) {
+  //   globalUniform.probeDirection.x = -30
   // }
-  globalUniform.probeDirection.x += 0.1;
-  globalUniform.probeDirection.z += 0.1;
-  // globalUniform.probePos.y += 0.01;
+
+  if (globalUniform.probePos.y <= -3) {
+    globalUniform.probePos.y = 4
+  }
+
+  // globalUniform.sunPos.z += 0.03;
+
+  // globalUniform.probeDirection.x += 0.1;
+  globalUniform.probeDirection.y += 0.2;
+  // globalUniform.probePos.y -= 0.02;
 
   const T = new Matrix4().makeTranslation(globalUniform.probePos);
   const R = new Matrix4().makeRotationFromEuler(new THREE.Euler(
@@ -75,46 +105,86 @@ var render = function () {
     THREE.MathUtils.degToRad(globalUniform.probeDirection.z),
     'XYZ'));
 
-  /******************平面相关****************************/
-  const fillMesh = scene.getObjectByName('fillPlaneMesh');
-  const lineMeshL = scene.getObjectByName('edgesPlaneMeshL');
-  const lineMeshR = scene.getObjectByName('edgesPlaneMeshR');
-  const tipMesh = scene.getObjectByName('probeText');
+  const lineOffset = new Matrix4().makeRotationZ(globalUniform.probeAngleSize / 2);
+
+  /******************实时探头平面相关****************************/
+  const rFillMesh = realTimeProbePlane.getObjectByName('fillPlaneMesh');
+  const rLineMeshL = realTimeProbePlane.getObjectByName('edgesPlaneMeshL');
+  const rLineMeshR = realTimeProbePlane.getObjectByName('edgesPlaneMeshR');
+  const rTipMesh = realTimeProbePlane.getObjectByName('probeText');
   const planeScale = 8;
   const S = new Matrix4().makeScale(planeScale, planeScale, planeScale);
   const planeMat4 = new Matrix4().multiply(T).multiply(R).multiply(S);
-  fillMesh && (fillMesh.matrixAutoUpdate = false); // 禁止自动更新矩阵
-  lineMeshL && (lineMeshL.matrixAutoUpdate = false);
-  lineMeshR && (lineMeshR.matrixAutoUpdate = false);
-  tipMesh && (tipMesh.matrixAutoUpdate = false);
-
-  const lineOffset = new Matrix4().makeRotationZ(globalUniform.probeAngleSize / 2);
+  rFillMesh && (rFillMesh.matrixAutoUpdate = false); // 禁止自动更新矩阵
+  rLineMeshL && (rLineMeshL.matrixAutoUpdate = false);
+  rLineMeshR && (rLineMeshR.matrixAutoUpdate = false);
+  rTipMesh && (rTipMesh.matrixAutoUpdate = false);
 
   const probeLineLocalMat4 = new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(-90))
     .multiply(new Matrix4().makeTranslation(0, 0.5, 0));
 
-  fillMesh && (fillMesh.matrix = planeMat4);
-  lineMeshL && (lineMeshL.matrix = new Matrix4().multiply(planeMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
-  lineMeshR && (lineMeshR.matrix = new Matrix4().multiply(planeMat4).multiply(new Matrix4().copy(lineOffset).invert()).multiply(probeLineLocalMat4));
-
+  rFillMesh && (rFillMesh.matrix = planeMat4);
+  rLineMeshL && (rLineMeshL.matrix = new Matrix4().multiply(planeMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
+  rLineMeshR && (rLineMeshR.matrix = new Matrix4().multiply(planeMat4).multiply(new Matrix4().copy(lineOffset).invert()).multiply(probeLineLocalMat4));
   // 探头文字相关
-  const tipOffset = new Matrix4().multiply(T).multiply(R).multiply(new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(50)))
-    .multiply(new Matrix4().makeTranslation(3, 0, 0));
+  const tipOffset = new Matrix4().multiply(T).multiply(R).multiply(new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(60)))
+    .multiply(new Matrix4().makeTranslation(1, 0, 0));
 
-  tipMesh && (tipMesh.matrix = new Matrix4().multiply(tipOffset));
+  rTipMesh && (rTipMesh.matrix = new Matrix4().multiply(tipOffset));
   /**********************************************/
 
+
+  /*********************标准切面相关******************************/
+  const sFillMesh = normProbePlane.getObjectByName('fillPlaneMesh');
+  const sLineMeshL = normProbePlane.getObjectByName('edgesPlaneMeshL');
+  const sLineMeshR = normProbePlane.getObjectByName('edgesPlaneMeshR');
+  const sTipMesh = normProbePlane.getObjectByName('probeText');
+  const sR = new Matrix4().makeRotationFromEuler(new THREE.Euler(
+    THREE.MathUtils.degToRad(globalUniform.sProbeDirection.x),
+    THREE.MathUtils.degToRad(globalUniform.sProbeDirection.y),
+    THREE.MathUtils.degToRad(globalUniform.sProbeDirection.z),
+    'XYZ'));
+  const sT = new Matrix4().makeTranslation(globalUniform.sProbePos);
+  const sPlaneMat4 = new Matrix4().multiply(sT).multiply(sR).multiply(S);
+  sFillMesh && (sFillMesh.matrixAutoUpdate = false); // 禁止自动更新矩阵
+  sLineMeshL && (sLineMeshL.matrixAutoUpdate = false);
+  sLineMeshR && (sLineMeshR.matrixAutoUpdate = false);
+  sTipMesh && (sTipMesh.matrixAutoUpdate = false);
+
+  sFillMesh && (sFillMesh.matrix = sPlaneMat4);
+  sLineMeshL && (sLineMeshL.matrix = new Matrix4().multiply(sPlaneMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
+  sLineMeshR && (sLineMeshR.matrix = new Matrix4().multiply(sPlaneMat4).multiply(new Matrix4().copy(lineOffset).invert()).multiply(probeLineLocalMat4));
+  // 探头文字相关
+  const sTipOffset = new Matrix4().multiply(sT).multiply(sR).multiply(new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(60)))
+    .multiply(new Matrix4().makeTranslation(1, 0, 0));
+
+  sTipMesh && (sTipMesh.matrix = new Matrix4().multiply(sTipOffset));
+
+
+  /*************************************************************/
+
+
   /*****************心脏相关**********************/
+  let lineLVec3 = new THREE.Vector3(1, 0, 0).applyMatrix4(new Matrix4().multiply(planeMat4).multiply(lineOffset))
+  let lineRVec3 = new THREE.Vector3(1, 0, 0).applyMatrix4(new Matrix4().multiply(planeMat4).multiply(new Matrix4().copy(lineOffset).invert()))
+
+  // console.log(lineLVec3, lineRVec3)
   const coronaryMat4 = new Matrix4().multiplyMatrices(T, R).invert();
+  // console.log(new THREE.Vector3().subVectors(lineLVec3, globalUniform.probePos).normalize(),
+  //   new THREE.Vector3().subVectors(lineRVec3, globalUniform.probePos).normalize())
+
   scene.traverse((object) => {
-    if (object.name === 'coronaryBack' && object instanceof THREE.Mesh) {
-      object.material.uniforms.plane.value = coronaryMat4.elements;
+    if (object.name === 'coronary' && object instanceof THREE.Mesh) {
+      object.material.uniforms.plane.value = coronaryMat4;
+      object.material.uniforms.probePos.value = globalUniform.probePos;
+      object.material.uniforms.lineL.value = lineLVec3;
+      object.material.uniforms.lineR.value = lineRVec3;
     }
   })
   /**********************************************/
 
   /*****************探头相关**********************/
-  const probeMesh = scene.getObjectByName('probeMesh');
+  const probeMesh = probe.getObjectByName('probeMesh');
   const scale = 0.025;
   const probeMat4 = new Matrix4().makeRotationFromEuler(new THREE.Euler(
     THREE.MathUtils.degToRad(-90),
