@@ -3,7 +3,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { loadCoronaryGroup, loadCoronaryProbe } from './loader';
 import { prepareCoronary } from './mesh/coronary';
 import { preparePlane } from "./mesh/plane";
-import { prepareProbe } from "./mesh/probe"
 
 const Matrix4 = THREE.Matrix4;
 
@@ -45,7 +44,6 @@ let realTimeProbePlane = null;
 let normProbePlane = null;
 let coronaryBack = null;
 let coronaryFront = null;
-let probe = null;
 let ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
 let directiontLight = new THREE.DirectionalLight(0xffffff, 0.5);
 
@@ -54,11 +52,11 @@ const prepareScence = async () => {
   /** 加载模型 */
   const coronaryMeshGroup = await loadCoronaryGroup();
   const coronaryProbeMesh = await loadCoronaryProbe();
+  const probeGeometry = coronaryProbeMesh.children[0].geometry
   // 初始化 材质
   const { backGroup, frontGroup } = await prepareCoronary(coronaryMeshGroup, scene, globalUniform);
-  realTimeProbePlane = await preparePlane(scene, globalUniform, { planeColor: 0xffffff, isNorm: false });
-  normProbePlane = await preparePlane(scene, globalUniform, { planeColor: 0xAAAAAA, isNorm: true });
-  probe = await prepareProbe(coronaryProbeMesh.children[0].geometry, scene, globalUniform);
+  realTimeProbePlane = await preparePlane(scene, globalUniform, { planeColor: 0xffffff, isNorm: false, probeGeometry });
+  normProbePlane = await preparePlane(scene, globalUniform, { planeColor: 0xAAAAAA, isNorm: true, probeGeometry });
   coronaryBack = backGroup;
   coronaryFront = frontGroup;
 
@@ -79,7 +77,6 @@ var render = function () {
   scene.add(coronaryBack)
   scene.add(coronaryFront)
   scene.add(realTimeProbePlane)
-  scene.add(probe)
   scene.add(normProbePlane)
   scene.add(ambientLight)
   scene.add(directiontLight)
@@ -98,68 +95,33 @@ var render = function () {
   globalUniform.probeDirection.y += 0.2;
   // globalUniform.probePos.y -= 0.02;
 
+
+  const planeScale = 8;
+  const S = new Matrix4().makeScale(planeScale, planeScale, planeScale);
   const T = new Matrix4().makeTranslation(globalUniform.probePos);
   const R = new Matrix4().makeRotationFromEuler(new THREE.Euler(
     THREE.MathUtils.degToRad(globalUniform.probeDirection.x),
     THREE.MathUtils.degToRad(globalUniform.probeDirection.y),
     THREE.MathUtils.degToRad(globalUniform.probeDirection.z),
     'XYZ'));
-
-  const lineOffset = new Matrix4().makeRotationZ(globalUniform.probeAngleSize / 2);
-
-  /******************实时探头平面相关****************************/
-  const rFillMesh = realTimeProbePlane.getObjectByName('fillPlaneMesh');
-  const rLineMeshL = realTimeProbePlane.getObjectByName('edgesPlaneMeshL');
-  const rLineMeshR = realTimeProbePlane.getObjectByName('edgesPlaneMeshR');
-  const rTipMesh = realTimeProbePlane.getObjectByName('probeText');
-  const planeScale = 8;
-  const S = new Matrix4().makeScale(planeScale, planeScale, planeScale);
   const planeMat4 = new Matrix4().multiply(T).multiply(R).multiply(S);
-  rFillMesh && (rFillMesh.matrixAutoUpdate = false); // 禁止自动更新矩阵
-  rLineMeshL && (rLineMeshL.matrixAutoUpdate = false);
-  rLineMeshR && (rLineMeshR.matrixAutoUpdate = false);
-  rTipMesh && (rTipMesh.matrixAutoUpdate = false);
-
-  const probeLineLocalMat4 = new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(-90))
-    .multiply(new Matrix4().makeTranslation(0, 0.5, 0));
-
-  rFillMesh && (rFillMesh.matrix = planeMat4);
-  rLineMeshL && (rLineMeshL.matrix = new Matrix4().multiply(planeMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
-  rLineMeshR && (rLineMeshR.matrix = new Matrix4().multiply(planeMat4).multiply(new Matrix4().copy(lineOffset).invert()).multiply(probeLineLocalMat4));
-  // 探头文字相关
-  const tipOffset = new Matrix4().multiply(T).multiply(R).multiply(new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(60)))
-    .multiply(new Matrix4().makeTranslation(1, 0, 0));
-
-  rTipMesh && (rTipMesh.matrix = new Matrix4().multiply(tipOffset));
-  /**********************************************/
-
+  const lineOffset = new Matrix4().makeRotationZ(globalUniform.probeAngleSize / 2);
+  /******************实时探头平面相关****************************/
+  realTimeProbePlane && (realTimeProbePlane.matrixAutoUpdate = false);
+  realTimeProbePlane.matrix = new Matrix4().multiply(T).multiply(R)
+  realTimeProbePlane.userData.tick(scene)
 
   /*********************标准切面相关******************************/
-  const sFillMesh = normProbePlane.getObjectByName('fillPlaneMesh');
-  const sLineMeshL = normProbePlane.getObjectByName('edgesPlaneMeshL');
-  const sLineMeshR = normProbePlane.getObjectByName('edgesPlaneMeshR');
-  const sTipMesh = normProbePlane.getObjectByName('probeText');
-  const sR = new Matrix4().makeRotationFromEuler(new THREE.Euler(
+
+  const T1 = new Matrix4().makeTranslation(globalUniform.sProbePos);
+  const R1 = new Matrix4().makeRotationFromEuler(new THREE.Euler(
     THREE.MathUtils.degToRad(globalUniform.sProbeDirection.x),
     THREE.MathUtils.degToRad(globalUniform.sProbeDirection.y),
     THREE.MathUtils.degToRad(globalUniform.sProbeDirection.z),
     'XYZ'));
-  const sT = new Matrix4().makeTranslation(globalUniform.sProbePos);
-  const sPlaneMat4 = new Matrix4().multiply(sT).multiply(sR).multiply(S);
-  sFillMesh && (sFillMesh.matrixAutoUpdate = false); // 禁止自动更新矩阵
-  sLineMeshL && (sLineMeshL.matrixAutoUpdate = false);
-  sLineMeshR && (sLineMeshR.matrixAutoUpdate = false);
-  sTipMesh && (sTipMesh.matrixAutoUpdate = false);
-
-  sFillMesh && (sFillMesh.matrix = sPlaneMat4);
-  sLineMeshL && (sLineMeshL.matrix = new Matrix4().multiply(sPlaneMat4).multiply(lineOffset).multiply(probeLineLocalMat4));
-  sLineMeshR && (sLineMeshR.matrix = new Matrix4().multiply(sPlaneMat4).multiply(new Matrix4().copy(lineOffset).invert()).multiply(probeLineLocalMat4));
-  // 探头文字相关
-  const sTipOffset = new Matrix4().multiply(sT).multiply(sR).multiply(new Matrix4().makeRotationZ(THREE.MathUtils.degToRad(60)))
-    .multiply(new Matrix4().makeTranslation(1, 0, 0));
-
-  sTipMesh && (sTipMesh.matrix = new Matrix4().multiply(sTipOffset));
-
+  normProbePlane && (normProbePlane.matrixAutoUpdate = false);
+  normProbePlane.matrix = new Matrix4().multiply(T1).multiply(R1)
+  normProbePlane.userData.tick(scene)
 
   /*************************************************************/
 
@@ -182,20 +144,6 @@ var render = function () {
     }
   })
   /**********************************************/
-
-  /*****************探头相关**********************/
-  const probeMesh = probe.getObjectByName('probeMesh');
-  const scale = 0.025;
-  const probeMat4 = new Matrix4().makeRotationFromEuler(new THREE.Euler(
-    THREE.MathUtils.degToRad(-90),
-    THREE.MathUtils.degToRad(-90),
-    0,
-    'XYZ'))
-    .multiply(new Matrix4().makeScale(scale, scale, scale));
-  probeMesh.matrixAutoUpdate = false; // 禁止自动更新矩阵
-  probeMesh.matrix = new Matrix4().multiply(T).multiply(R).multiply(probeMat4);
-  /**********************************************/
-
 
   renderer.render(scene, camera);
 };
